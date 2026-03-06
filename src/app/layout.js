@@ -14,6 +14,9 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "IOA IOP CG | Cursos em Odontologia",
   description: "Instituto de Pós-Graduação em Odontologia",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {

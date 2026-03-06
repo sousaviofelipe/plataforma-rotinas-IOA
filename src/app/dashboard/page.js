@@ -329,7 +329,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
-            Olá, {profile?.full_name?.split(" ")[0]} 👋
+            Olá3, {profile?.full_name?.split(" ")[0]} 👋
           </h1>
           <p className="text-gray-500 text-sm mt-1">
             {DAY_LABEL[today]},{" "}
