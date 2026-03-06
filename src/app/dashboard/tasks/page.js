@@ -5,7 +5,7 @@ import {
   createNotification,
   extractMentions,
 } from "@/lib/notifications";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "@/lib/supabase";
 
 const DAYS = {
@@ -28,7 +28,7 @@ const DAY_MAP = [
   "saturday",
 ];
 
-export default function TasksPage() {
+function TasksContent() {
   const [statusFilter, setStatusFilter] = useState("");
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -743,5 +743,13 @@ export default function TasksPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TasksPage() {
+  return (
+    <Suspense fallback={<p className="text-gray-400 text-sm">Carregando...</p>}>
+      <TasksContent />
+    </Suspense>
   );
 }
