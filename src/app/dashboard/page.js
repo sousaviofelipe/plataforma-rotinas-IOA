@@ -342,20 +342,20 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {isAdmin && (
-            <button
-              onClick={generatePDF}
-              className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
-            >
-              📄 Relatório
-            </button>
-          )}
-          {isAdmin && (
             <Link
               href="/dashboard/manage"
               className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
             >
               ➕ Tarefa
             </Link>
+          )}
+          {isAdmin && (
+            <button
+              onClick={generatePDF}
+              className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+            >
+              📄 Relatório
+            </button>
           )}
           <Link
             href="/dashboard/manual"
