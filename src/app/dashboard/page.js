@@ -340,14 +340,37 @@ export default function DashboardPage() {
             })}
           </p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={generatePDF}
-            className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-2"
+        <div className="flex gap-2 flex-wrap">
+          {isAdmin && (
+            <button
+              onClick={generatePDF}
+              className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+            >
+              📄 Relatório
+            </button>
+          )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/manage"
+              className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+            >
+              ➕ Tarefa
+            </Link>
+          )}
+          <Link
+            href="/dashboard/manual"
+            className="bg-gray-300 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
           >
-            📄 Relatório do dia
+            📋 Manual
+          </Link>
+
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+          >
+            🔄 Atualizar
           </button>
-        )}
+        </div>
       </div>
 
       {/* Cards de estatísticas */}
