@@ -14,6 +14,9 @@ const DAYS = [
 ];
 
 export default function ManagePage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const ITEMS_PER_PAGE = 8;
   const supabase = createClient();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -41,6 +44,10 @@ export default function ManagePage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    loadData();
+  }, [currentPage]);
+
   async function loadData() {
     const {
       data: { user },
@@ -54,11 +61,19 @@ export default function ManagePage() {
       .single();
     setCurrentProfile(profile);
 
-    const { data: tasksData } = await supabase
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    const { data: tasksData, count } = await supabase
       .from("tasks")
-      .select("*, profiles!tasks_assigned_to_fkey(full_name), sectors(name)")
-      .order("day_of_week");
+      .select("*, profiles!tasks_assigned_to_fkey(full_name), sectors(name)", {
+        count: "exact",
+      })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
     setTasks(tasksData || []);
+    setTotalCount(count || 0);
 
     const { data: usersData } = await supabase
       .from("profiles")
@@ -555,6 +570,49 @@ export default function ManagePage() {
           </tbody>
         </table>
       </div>
+      {/* Paginação */}
+      {totalCount > ITEMS_PER_PAGE && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-gray-500">
+            Mostrando{" "}
+            {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, totalCount)} a{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} de {totalCount}{" "}
+            tarefas
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-40"
+            >
+              ← Anterior
+            </button>
+            {Array.from(
+              { length: Math.ceil(totalCount / ITEMS_PER_PAGE) },
+              (_, i) => i + 1,
+            ).map((page) => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`px-3 py-1.5 text-sm rounded-lg transition ${currentPage === page ? "bg-blue-700 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() =>
+                setCurrentPage((p) =>
+                  Math.min(Math.ceil(totalCount / ITEMS_PER_PAGE), p + 1),
+                )
+              }
+              disabled={currentPage === Math.ceil(totalCount / ITEMS_PER_PAGE)}
+              className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-40"
+            >
+              Próxima →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
