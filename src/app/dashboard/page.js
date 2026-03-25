@@ -15,25 +15,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Link from "next/link";
 
-const DAY_MAP = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-];
-const DAY_LABEL = {
-  monday: "Segunda-feira",
-  tuesday: "Terça-feira",
-  wednesday: "Quarta-feira",
-  thursday: "Quinta-feira",
-  friday: "Sexta-feira",
-  saturday: "Sábado",
-  sunday: "Domingo",
-};
-
 export default function DashboardPage() {
   const [performance, setPerformance] = useState([]);
   const [weekData, setWeekData] = useState([]);
@@ -44,11 +25,16 @@ export default function DashboardPage() {
     completed: 0,
     pending: 0,
     not_completed: 0,
+    in_progress: 0,
   });
   const [todayTasks, setTodayTasks] = useState([]);
   const [recentHistory, setRecentHistory] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const today = DAY_MAP[new Date().getDay()];
+
+  function formatDate(date) {
+    return date.toISOString().split("T")[0];
+  }
+  const todayStr = formatDate(new Date());
 
   useEffect(() => {
     loadData();
@@ -74,7 +60,8 @@ export default function DashboardPage() {
     let statsQuery = supabase
       .from("tasks")
       .select("status")
-      .eq("day_of_week", today);
+      .lte("date_start", todayStr)
+      .gte("date_end", todayStr);
     if (!admin) statsQuery = statsQuery.eq("assigned_to", user.id);
     const { data: allTasks } = await statsQuery;
 
@@ -85,13 +72,15 @@ export default function DashboardPage() {
         pending: allTasks.filter((t) => t.status === "pending").length,
         not_completed: allTasks.filter((t) => t.status === "not_completed")
           .length,
+        in_progress: allTasks.filter((t) => t.status === "in_progress").length,
       });
     }
 
     let todayQuery = supabase
       .from("tasks")
       .select("*, profiles!tasks_assigned_to_fkey(full_name), sectors(name)")
-      .eq("day_of_week", today)
+      .lte("date_start", todayStr)
+      .gte("date_end", todayStr)
       .order("created_at");
     if (!admin) todayQuery = todayQuery.eq("assigned_to", user.id);
     const { data: todayData } = await todayQuery;
@@ -111,7 +100,8 @@ export default function DashboardPage() {
         .select(
           "status, assigned_to, profiles!tasks_assigned_to_fkey(full_name, avatar_url)",
         )
-        .eq("day_of_week", today)
+        .lte("date_start", todayStr)
+        .gte("date_end", todayStr)
         .not("assigned_to", "is", null);
 
       if (perfTasks) {
@@ -126,13 +116,15 @@ export default function DashboardPage() {
               avatar,
               completed: 0,
               pending: 0,
+              in_progress: 0,
               not_completed: 0,
               total: 0,
             };
           map[id].total++;
           if (t.status === "completed") map[id].completed++;
-          else if (t.status === "pending" || t.status === "waiting_approval")
-            map[id].pending++;
+          else if (t.status === "pending") map[id].pending++;
+          else if (t.status === "waiting_approval") map[id].pending++;
+          else if (t.status === "in_progress") map[id].in_progress++;
           else if (t.status === "not_completed") map[id].not_completed++;
         });
         const sorted = Object.values(map).sort(
@@ -142,29 +134,33 @@ export default function DashboardPage() {
       }
     }
     if (admin) {
-      const weekDays = ["monday", "tuesday", "wednesday", "thursday", "friday"];
-      const weekLabels = {
-        monday: "Seg",
-        tuesday: "Ter",
-        wednesday: "Qua",
-        thursday: "Qui",
-        friday: "Sex",
-      };
+      const weekDays = [];
+      for (let i = 4; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        weekDays.push(formatDate(d));
+      }
 
       const { data: weekTasks } = await supabase
         .from("tasks")
-        .select("status, day_of_week")
-        .in("day_of_week", weekDays);
+        .select("status, date_start, date_end")
+        .lte("date_start", weekDays[weekDays.length - 1])
+        .gte("date_end", weekDays[0]);
 
       if (weekTasks) {
-        const data = weekDays.map((day) => {
-          const dayTasks = weekTasks.filter((t) => t.day_of_week === day);
+        const data = weekDays.map((dateStr) => {
+          const dayTasks = (weekTasks || []).filter(
+            (t) => t.date_start <= dateStr && t.date_end >= dateStr,
+          );
+          const [y, m, d] = dateStr.split("-");
           return {
-            day: weekLabels[day],
+            day: `${d}/${m}`,
             Concluídas: dayTasks.filter((t) => t.status === "completed").length,
             Pendentes: dayTasks.filter(
               (t) => t.status === "pending" || t.status === "waiting_approval",
             ).length,
+            "Em andamento": dayTasks.filter((t) => t.status === "in_progress")
+              .length, // 👈 AQUI
             "Não concluídas": dayTasks.filter(
               (t) => t.status === "not_completed",
             ).length,
@@ -179,6 +175,7 @@ export default function DashboardPage() {
     if (status === "completed") return "bg-green-100 text-green-700";
     if (status === "not_completed") return "bg-red-100 text-red-700";
     if (status === "waiting_approval") return "bg-blue-100 text-blue-700";
+    if (status === "in_progress") return "bg-purple-100 text-purple-700";
     return "bg-yellow-100 text-yellow-700";
   };
 
@@ -186,6 +183,7 @@ export default function DashboardPage() {
     if (status === "completed") return "Concluída";
     if (status === "not_completed") return "Não concluída";
     if (status === "waiting_approval") return "Aguard. aprovação";
+    if (status === "in_progress") return "Em andamento";
     return "Pendente";
   };
 
@@ -217,10 +215,20 @@ export default function DashboardPage() {
 
     autoTable(doc, {
       startY: 53,
-      head: [["Total", "Concluídas", "Pendentes", "Não concluídas"]],
-      body: [
-        [stats.total, stats.completed, stats.pending, stats.not_completed],
+      head: [
+        ["Total", "Concluídas", "Em andamento", "Pendentes", "Não concluídas"],
       ],
+
+      body: [
+        [
+          stats.total,
+          stats.completed,
+          stats.in_progress,
+          stats.pending,
+          stats.not_completed,
+        ],
+      ],
+
       headStyles: { fillColor: [30, 58, 138], fontSize: 10 },
       bodyStyles: { fontSize: 11, halign: "center" },
       columnStyles: {
@@ -332,8 +340,8 @@ export default function DashboardPage() {
             Olá, {profile?.full_name?.split(" ")[0]} 👋
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            {DAY_LABEL[today]},{" "}
             {new Date().toLocaleDateString("pt-BR", {
+              weekday: "long",
               day: "2-digit",
               month: "long",
               year: "numeric",
@@ -374,7 +382,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Cards de estatísticas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         {[
           {
             label: "Total",
@@ -389,6 +397,13 @@ export default function DashboardPage() {
             color: "bg-green-50 text-green-700",
             icon: "✅",
             filter: "completed",
+          },
+          {
+            label: "Em andamento",
+            value: stats.in_progress,
+            color: "bg-purple-50 text-purple-700",
+            icon: "🔄",
+            filter: "in_progress",
           },
           {
             label: "Pendentes",
@@ -542,6 +557,7 @@ export default function DashboardPage() {
                 <tr className="text-gray-400 text-left border-b border-gray-100">
                   <th className="pb-2 font-medium">👤</th>
                   <th className="pb-2 font-medium text-center">✅</th>
+                  <th className="pb-2 font-medium text-center">🔄</th>
                   <th className="pb-2 font-medium text-center">⏳</th>
                   <th className="pb-2 font-medium text-center">❌</th>
                   <th className="pb-2 font-medium text-center">Total</th>
@@ -573,6 +589,9 @@ export default function DashboardPage() {
                     </td>
                     <td className="py-2 text-center text-green-600 font-semibold">
                       {p.completed}
+                    </td>
+                    <td className="py-2 text-center text-purple-600 font-semibold">
+                      {p.in_progress}
                     </td>
                     <td className="py-2 text-center text-yellow-600 font-semibold">
                       {p.pending}
@@ -607,6 +626,12 @@ export default function DashboardPage() {
               <Tooltip />
               <Legend />
               <Bar dataKey="Concluídas" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              <Bar
+                dataKey="Em andamento"
+                fill="#9333ea"
+                radius={[4, 4, 0, 0]}
+              />
+
               <Bar dataKey="Pendentes" fill="#eab308" radius={[4, 4, 0, 0]} />
               <Bar
                 dataKey="Não concluídas"

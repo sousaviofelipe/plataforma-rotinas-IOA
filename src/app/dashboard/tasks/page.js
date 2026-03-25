@@ -8,33 +8,13 @@ import {
 import { useState, useEffect, Suspense } from "react";
 import { createClient } from "@/lib/supabase";
 
-const DAYS = {
-  monday: "SEG",
-  tuesday: "TER",
-  wednesday: "QUA",
-  thursday: "QUI",
-  friday: "SEX",
-  saturday: "SÁB",
-  sunday: "DOM",
-};
-
-const DAY_MAP = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-];
-
 function TasksContent() {
   const [statusFilter, setStatusFilter] = useState("");
   const searchParams = useSearchParams();
   const supabase = createClient();
   const [profile, setProfile] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [selectedDay, setSelectedDay] = useState(DAY_MAP[new Date().getDay()]);
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [selectedTask, setSelectedTask] = useState(null);
   const [comments, setComments] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -45,9 +25,19 @@ function TasksContent() {
   const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  function formatDate(date) {
+    return date.toISOString().split("T")[0];
+  }
+
+  function formatDateBR(dateStr) {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
   useEffect(() => {
     loadData();
-  }, [selectedDay]);
+  }, [selectedDate]);
 
   useEffect(() => {
     const taskId = searchParams.get("task");
@@ -65,7 +55,7 @@ function TasksContent() {
             .eq("id", taskId)
             .single();
           if (data) {
-            setSelectedDay(data.day_of_week);
+            setSelectedDate(data.date_start || formatDate(new Date()));
             openTask(data);
           }
         }
@@ -105,7 +95,8 @@ function TasksContent() {
       .select(
         "*, profiles!tasks_assigned_to_fkey(full_name, avatar_url), sectors(name)",
       )
-      .eq("day_of_week", selectedDay)
+      .lte("date_start", selectedDate)
+      .gte("date_end", selectedDate)
       .order("created_at");
 
     if (profileData?.role === "employee") {
@@ -184,6 +175,43 @@ function TasksContent() {
     });
 
     setSelectedTask({ ...selectedTask, status: newStatus });
+    loadData();
+    setLoading(false);
+  }
+
+  async function handleInProgress() {
+    if (!selectedTask) return;
+    setLoading(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+
+    await supabase
+      .from("tasks")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", selectedTask.id);
+
+    await supabase.from("history").insert({
+      task_id: selectedTask.id,
+      user_id: user.id,
+      action: "Tarefa em andamento",
+      details: `${profileData.full_name} iniciou a tarefa "${selectedTask.title}".`,
+    });
+
+    await notifyTaskParticipants({
+      task_id: selectedTask.id,
+      exclude_user_id: user.id,
+      type: "comment",
+      message: `${profileData.full_name} iniciou a tarefa "${selectedTask.title}".`,
+    });
+
+    setSelectedTask({ ...selectedTask, status: "in_progress" });
     loadData();
     setLoading(false);
   }
@@ -398,6 +426,7 @@ function TasksContent() {
     if (status === "completed") return "bg-green-100 text-green-700";
     if (status === "not_completed") return "bg-red-100 text-red-700";
     if (status === "waiting_approval") return "bg-blue-100 text-blue-700";
+    if (status === "in_progress") return "bg-purple-100 text-purple-700";
     return "bg-yellow-100 text-yellow-700";
   };
 
@@ -405,6 +434,7 @@ function TasksContent() {
     if (status === "completed") return "Concluída";
     if (status === "not_completed") return "Não concluída";
     if (status === "waiting_approval") return "Aguardando aprovação";
+    if (status === "in_progress") return "Em andamento";
     return "Pendente";
   };
 
@@ -416,24 +446,48 @@ function TasksContent() {
           <h1 className="text-2xl font-bold text-gray-800">Tarefas</h1>
         </div>
 
-        {/* Seletor de dia */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {Object.entries(DAYS).map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => {
-                setSelectedDay(value);
-                setSelectedTask(null);
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                selectedDay === value
-                  ? "bg-blue-700 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Seletor de data */}
+        <div className="flex items-center gap-3 mb-6 bg-white rounded-2xl shadow-sm px-4 py-3">
+          <button
+            onClick={() => {
+              const d = new Date(selectedDate + "T12:00:00");
+              d.setDate(d.getDate() - 1);
+              setSelectedDate(formatDate(d));
+              setSelectedTask(null);
+            }}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-600"
+          >
+            ←
+          </button>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => {
+              setSelectedDate(e.target.value);
+              setSelectedTask(null);
+            }}
+            className="flex-1 text-center text-sm font-semibold text-gray-700 focus:outline-none"
+          />
+          <button
+            onClick={() => {
+              const d = new Date(selectedDate + "T12:00:00");
+              d.setDate(d.getDate() + 1);
+              setSelectedDate(formatDate(d));
+              setSelectedTask(null);
+            }}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-600"
+          >
+            →
+          </button>
+          <button
+            onClick={() => {
+              setSelectedDate(formatDate(new Date()));
+              setSelectedTask(null);
+            }}
+            className="text-xs text-blue-600 hover:underline font-medium"
+          >
+            Hoje
+          </button>
         </div>
 
         {/* Cards de tarefas */}
@@ -522,26 +576,40 @@ function TasksContent() {
           </div>
 
           {/* Funcionário pode concluir ou marcar como não concluída */}
-          {selectedTask.status === "pending" && !isAdmin && (
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={handleCheckIn}
-                disabled={loading}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                ✅ Concluir
-              </button>
-              <button
-                onClick={() => setShowJustification(!showJustification)}
-                className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold py-2 rounded-lg transition"
-              >
-                ❌ Não concluída
-              </button>
-            </div>
-          )}
+          {(selectedTask.status === "pending" ||
+            selectedTask.status === "in_progress") &&
+            !isAdmin && (
+              <div className="flex flex-col gap-2 mb-4">
+                {selectedTask.status === "pending" && (
+                  <button
+                    onClick={handleInProgress}
+                    disabled={loading}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                  >
+                    🔄 Iniciar andamento
+                  </button>
+                )}
+                {selectedTask.status === "in_progress" && (
+                  <button
+                    onClick={handleCheckIn}
+                    disabled={loading}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                  >
+                    ✅ Concluir
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowJustification(!showJustification)}
+                  className="w-full bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold py-2 rounded-lg transition"
+                >
+                  ❌ Não concluída
+                </button>
+              </div>
+            )}
 
           {/* Admin/supervisor pode concluir diretamente ou marcar como não concluída */}
           {(selectedTask.status === "pending" ||
+            selectedTask.status === "in_progress" ||
             selectedTask.status === "waiting_approval" ||
             selectedTask.status === "not_completed") &&
             isAdmin && (

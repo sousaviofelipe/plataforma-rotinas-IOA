@@ -14,6 +14,7 @@ const DAYS = [
 ];
 
 export default function ManagePage() {
+  const [calendarDate, setCalendarDate] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const ITEMS_PER_PAGE = 8;
@@ -37,7 +38,8 @@ export default function ManagePage() {
     description: "",
     sector_id: "",
     assigned_to: "",
-    days: [],
+    date_start: "",
+    date_end: "",
   });
 
   useEffect(() => {
@@ -95,7 +97,8 @@ export default function ManagePage() {
       description: "",
       sector_id: "",
       assigned_to: "",
-      day_of_week: "monday",
+      date_start: "",
+      date_end: "",
     });
     setError("");
     setSuccess("");
@@ -109,7 +112,8 @@ export default function ManagePage() {
       description: task.description || "",
       sector_id: task.sector_id || "",
       assigned_to: task.assigned_to || "",
-      days: task.day_of_week ? [task.day_of_week] : [],
+      date_start: task.date_start || "",
+      date_end: task.date_end || task.date_start || "",
     });
     setError("");
     setSuccess("");
@@ -143,7 +147,8 @@ export default function ManagePage() {
           description: form.description,
           sector_id: form.sector_id || null,
           assigned_to: form.assigned_to || null,
-          day_of_week: form.day_of_week,
+          date_start: form.date_start,
+          date_end: form.date_end || form.date_start,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editingTask.id);
@@ -163,8 +168,8 @@ export default function ManagePage() {
         setShowForm(false);
       }
     } else {
-      if (form.days.length === 0) {
-        setError("Selecione pelo menos um dia.");
+      if (!form.date_start) {
+        setError("Selecione pelo menos uma data.");
         setLoading(false);
         return;
       }
@@ -175,45 +180,44 @@ export default function ManagePage() {
         .eq("id", user.id)
         .single();
 
-      for (const day of form.days) {
-        const { data, error } = await supabase
-          .from("tasks")
-          .insert({
-            title: form.title,
-            description: form.description,
-            sector_id: form.sector_id || null,
-            assigned_to: form.assigned_to || null,
-            day_of_week: day,
-            created_by: user.id,
-            status: "pending",
-          })
-          .select()
-          .single();
+      const { data, error } = await supabase
+        .from("tasks")
+        .insert({
+          title: form.title,
+          description: form.description,
+          sector_id: form.sector_id || null,
+          assigned_to: form.assigned_to || null,
+          date_start: form.date_start,
+          date_end: form.date_end || form.date_start,
+          created_by: user.id,
+          status: "pending",
+        })
+        .select()
+        .single();
 
-        if (error) {
-          setError("Erro ao criar tarefa.");
-          setLoading(false);
-          return;
-        }
-
-        await supabase.from("history").insert({
-          task_id: data.id,
-          user_id: user.id,
-          action: "Tarefa criada",
-          details: `Tarefa "${form.title}" foi criada.`,
-        });
-
-        if (form.assigned_to) {
-          await supabase.from("notifications").insert({
-            user_id: form.assigned_to,
-            task_id: data.id,
-            type: "comment",
-            message: `${profileData.full_name} atribuiu a tarefa "${form.title}" para você.`,
-          });
-        }
+      if (error) {
+        setError("Erro ao criar tarefa.");
+        setLoading(false);
+        return;
       }
 
-      setSuccess("Tarefa(s) criada(s) com sucesso!");
+      await supabase.from("history").insert({
+        task_id: data.id,
+        user_id: user.id,
+        action: "Tarefa criada",
+        details: `Tarefa "${form.title}" foi criada.`,
+      });
+
+      if (form.assigned_to) {
+        await supabase.from("notifications").insert({
+          user_id: form.assigned_to,
+          task_id: data.id,
+          type: "comment",
+          message: `${profileData.full_name} atribuiu a tarefa "${form.title}" para você.`,
+        });
+      }
+
+      setSuccess("Tarefa criada com sucesso!");
       loadData();
       setShowForm(false);
     }
@@ -264,6 +268,54 @@ export default function ManagePage() {
     if (status === "not_completed") return "Não concluída";
     return "Pendente";
   };
+
+  function formatDate(date) {
+    return date.toISOString().split("T")[0];
+  }
+
+  function formatDateBR(dateStr) {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
+  function getCalendarDays(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = [];
+
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+
+    return days;
+  }
+
+  function handleCalendarClick(dateStr) {
+    if (!form.date_start || (form.date_start && form.date_end)) {
+      setForm((prev) => ({
+        ...prev,
+        date_start: dateStr,
+        date_end: "",
+      }));
+    } else {
+      if (dateStr < form.date_start) {
+        setForm((prev) => ({
+          ...prev,
+          date_start: dateStr,
+          date_end: "",
+        }));
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          date_end: dateStr,
+        }));
+      }
+    }
+  }
 
   return (
     <div>
@@ -399,23 +451,119 @@ export default function ManagePage() {
 
             <div className="col-span-1 lg:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dias da semana
+                Data(s) da tarefa
               </label>
-              <div className="flex flex-wrap gap-2">
-                {DAYS.map((d) => (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                {/* Navegação do mês */}
+                <div className="flex items-center justify-between mb-3">
                   <button
-                    key={d.value}
                     type="button"
-                    onClick={() => toggleFormDay(d.value)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      (form.days || []).includes(d.value)
-                        ? "bg-blue-700 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                    onClick={() =>
+                      setCalendarDate(
+                        new Date(
+                          calendarDate.getFullYear(),
+                          calendarDate.getMonth() - 1,
+                          1,
+                        ),
+                      )
+                    }
+                    className="p-1.5 hover:bg-gray-200 rounded-lg transition text-gray-600"
                   >
-                    {d.label}
+                    ←
                   </button>
-                ))}
+                  <p className="text-sm font-semibold text-gray-700">
+                    {calendarDate.toLocaleString("pt-BR", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCalendarDate(
+                        new Date(
+                          calendarDate.getFullYear(),
+                          calendarDate.getMonth() + 1,
+                          1,
+                        ),
+                      )
+                    }
+                    className="p-1.5 hover:bg-gray-200 rounded-lg transition text-gray-600"
+                  >
+                    →
+                  </button>
+                </div>
+
+                {/* Cabeçalho dias */}
+                <div className="grid grid-cols-7 mb-1">
+                  {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(
+                    (d) => (
+                      <div
+                        key={d}
+                        className="text-center text-xs font-medium text-gray-400 py-1"
+                      >
+                        {d}
+                      </div>
+                    ),
+                  )}
+                </div>
+
+                {/* Dias do mês */}
+                <div className="grid grid-cols-7 gap-0.5">
+                  {getCalendarDays(calendarDate).map((day, idx) => {
+                    if (!day) return <div key={idx} />;
+                    const dateStr = formatDate(day);
+                    const isStart = form.date_start === dateStr;
+                    const isEnd = form.date_end === dateStr;
+                    const isInRange =
+                      form.date_start &&
+                      form.date_end &&
+                      dateStr > form.date_start &&
+                      dateStr < form.date_end;
+                    const isToday = dateStr === formatDate(new Date());
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleCalendarClick(dateStr)}
+                        className={`
+              text-center text-sm py-1.5 rounded-lg transition font-medium
+              ${isStart || isEnd ? "bg-blue-700 text-white" : ""}
+              ${isInRange ? "bg-blue-100 text-blue-700" : ""}
+              ${!isStart && !isEnd && !isInRange ? "hover:bg-gray-200 text-gray-700" : ""}
+              ${isToday && !isStart && !isEnd ? "ring-2 ring-blue-400" : ""}
+            `}
+                      >
+                        {day.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Resumo seleção */}
+                {form.date_start && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+                    <span>
+                      {form.date_end && form.date_end !== form.date_start
+                        ? `📅 ${formatDateBR(form.date_start)} até ${formatDateBR(form.date_end)}`
+                        : `📅 ${formatDateBR(form.date_start)}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          date_start: "",
+                          date_end: "",
+                        }))
+                      }
+                      className="text-red-400 hover:text-red-600 transition"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -527,7 +675,11 @@ export default function ManagePage() {
                   )}
                 </td>
                 <td className="px-6 py-4 text-gray-600">
-                  {dayLabel(task.day_of_week)}
+                  {task.date_start
+                    ? task.date_end && task.date_end !== task.date_start
+                      ? `${formatDateBR(task.date_start)} até ${formatDateBR(task.date_end)}`
+                      : formatDateBR(task.date_start)
+                    : "—"}
                 </td>
                 <td className="px-6 py-4 text-gray-600">
                   {task.sectors?.name || "—"}
