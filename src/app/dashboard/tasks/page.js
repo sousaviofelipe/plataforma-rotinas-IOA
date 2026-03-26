@@ -100,7 +100,7 @@ function TasksContent() {
       .order("created_at");
 
     if (profileData?.role === "employee") {
-      query = query.eq("assigned_to", user.id);
+      query = query.contains("assigned_users", [user.id]);
     }
 
     const { data: tasksData } = await query;

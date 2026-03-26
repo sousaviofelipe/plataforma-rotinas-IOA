@@ -38,6 +38,7 @@ export default function ManagePage() {
     description: "",
     sector_id: "",
     assigned_to: "",
+    assigned_users: [],
     date_start: "",
     date_end: "",
   });
@@ -97,6 +98,7 @@ export default function ManagePage() {
       description: "",
       sector_id: "",
       assigned_to: "",
+      assigned_users: [],
       date_start: "",
       date_end: "",
     });
@@ -112,12 +114,22 @@ export default function ManagePage() {
       description: task.description || "",
       sector_id: task.sector_id || "",
       assigned_to: task.assigned_to || "",
+      assigned_users: task.assigned_users || [],
       date_start: task.date_start || "",
       date_end: task.date_end || task.date_start || "",
     });
     setError("");
     setSuccess("");
     setShowForm(true);
+  }
+
+  function toggleAssignedUser(userId) {
+    setForm((prev) => ({
+      ...prev,
+      assigned_users: (prev.assigned_users || []).includes(userId)
+        ? (prev.assigned_users || []).filter((id) => id !== userId)
+        : [...(prev.assigned_users || []), userId],
+    }));
   }
 
   function toggleFormDay(day) {
@@ -146,7 +158,8 @@ export default function ManagePage() {
           title: form.title,
           description: form.description,
           sector_id: form.sector_id || null,
-          assigned_to: form.assigned_to || null,
+          assigned_to: form.assigned_users?.[0] || null,
+          assigned_users: form.assigned_users || [],
           date_start: form.date_start,
           date_end: form.date_end || form.date_start,
           updated_at: new Date().toISOString(),
@@ -186,7 +199,8 @@ export default function ManagePage() {
           title: form.title,
           description: form.description,
           sector_id: form.sector_id || null,
-          assigned_to: form.assigned_to || null,
+          assigned_to: form.assigned_users?.[0] || null,
+          assigned_users: form.assigned_users || [],
           date_start: form.date_start,
           date_end: form.date_end || form.date_start,
           created_by: user.id,
@@ -208,9 +222,9 @@ export default function ManagePage() {
         details: `Tarefa "${form.title}" foi criada.`,
       });
 
-      if (form.assigned_to) {
+      for (const userId of form.assigned_users || []) {
         await supabase.from("notifications").insert({
-          user_id: form.assigned_to,
+          user_id: userId,
           task_id: data.id,
           type: "comment",
           message: `${profileData.full_name} atribuiu a tarefa "${form.title}" para você.`,
@@ -429,24 +443,31 @@ export default function ManagePage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Responsável
+            <div className="col-span-1 lg:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Responsáveis
               </label>
-              <select
-                value={form.assigned_to}
-                onChange={(e) =>
-                  setForm({ ...form, assigned_to: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Selecione um funcionário</option>
+              <div className="flex flex-wrap gap-2">
                 {users.map((u) => (
-                  <option key={u.id} value={u.id}>
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => toggleAssignedUser(u.id)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      (form.assigned_users || []).includes(u.id)
+                        ? "bg-blue-700 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
                     {u.full_name}
-                  </option>
+                  </button>
                 ))}
-              </select>
+              </div>
+              {form.assigned_users?.length > 0 && (
+                <p className="text-xs text-blue-600 mt-2">
+                  {form.assigned_users.length} responsável(is) selecionado(s)
+                </p>
+              )}
             </div>
 
             <div className="col-span-1 lg:col-span-2">

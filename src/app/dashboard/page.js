@@ -62,7 +62,7 @@ export default function DashboardPage() {
       .select("status")
       .lte("date_start", todayStr)
       .gte("date_end", todayStr);
-    if (!admin) statsQuery = statsQuery.eq("assigned_to", user.id);
+    if (!admin) statsQuery = statsQuery.contains("assigned_users", [user.id]);
     const { data: allTasks } = await statsQuery;
 
     if (allTasks) {
@@ -82,7 +82,7 @@ export default function DashboardPage() {
       .lte("date_start", todayStr)
       .gte("date_end", todayStr)
       .order("created_at");
-    if (!admin) todayQuery = todayQuery.eq("assigned_to", user.id);
+    if (!admin) todayQuery = todayQuery.contains("assigned_users", [user.id]);
     const { data: todayData } = await todayQuery;
     setTodayTasks(todayData || []);
 
@@ -97,35 +97,64 @@ export default function DashboardPage() {
     if (admin) {
       const { data: perfTasks } = await supabase
         .from("tasks")
-        .select(
-          "status, assigned_to, profiles!tasks_assigned_to_fkey(full_name, avatar_url)",
-        )
+        .select("status, assigned_users, assigned_to")
         .lte("date_start", todayStr)
-        .gte("date_end", todayStr)
-        .not("assigned_to", "is", null);
+        .gte("date_end", todayStr);
+
+      const allUserIds = [
+        ...new Set(
+          (perfTasks || []).flatMap((t) =>
+            t.assigned_users?.length > 0
+              ? t.assigned_users
+              : t.assigned_to
+                ? [t.assigned_to]
+                : [],
+          ),
+        ),
+      ];
+
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in(
+          "id",
+          allUserIds.length > 0
+            ? allUserIds
+            : ["00000000-0000-0000-0000-000000000000"],
+        );
 
       if (perfTasks) {
         const map = {};
         perfTasks.forEach((t) => {
-          const id = t.assigned_to;
-          const name = t.profiles?.full_name || "—";
-          const avatar = t.profiles?.avatar_url || null;
-          if (!map[id])
-            map[id] = {
-              name,
-              avatar,
-              completed: 0,
-              pending: 0,
-              in_progress: 0,
-              not_completed: 0,
-              total: 0,
-            };
-          map[id].total++;
-          if (t.status === "completed") map[id].completed++;
-          else if (t.status === "pending") map[id].pending++;
-          else if (t.status === "waiting_approval") map[id].pending++;
-          else if (t.status === "in_progress") map[id].in_progress++;
-          else if (t.status === "not_completed") map[id].not_completed++;
+          const users =
+            t.assigned_users?.length > 0
+              ? t.assigned_users
+              : t.assigned_to
+                ? [t.assigned_to]
+                : [];
+          users.forEach((userId) => {
+            const profileInfo = (profilesData || []).find(
+              (p) => p.id === userId,
+            );
+            const name = profileInfo?.full_name || "—";
+            const avatar = profileInfo?.avatar_url || null;
+            if (!map[userId])
+              map[userId] = {
+                name,
+                avatar,
+                completed: 0,
+                pending: 0,
+                in_progress: 0,
+                not_completed: 0,
+                total: 0,
+              };
+            map[userId].total++;
+            if (t.status === "completed") map[userId].completed++;
+            else if (t.status === "pending") map[userId].pending++;
+            else if (t.status === "waiting_approval") map[userId].pending++;
+            else if (t.status === "in_progress") map[userId].in_progress++;
+            else if (t.status === "not_completed") map[userId].not_completed++;
+          });
         });
         const sorted = Object.values(map).sort(
           (a, b) => b.completed - a.completed,
