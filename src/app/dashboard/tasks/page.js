@@ -103,6 +103,10 @@ function TasksContent() {
       query = query.contains("assigned_users", [user.id]);
     }
 
+    if (profileData?.role === "supervisor") {
+      query = query.eq("sector_id", profileData.sector_id);
+    }
+
     const { data: tasksData } = await query;
     setTasks(tasksData || []);
   }

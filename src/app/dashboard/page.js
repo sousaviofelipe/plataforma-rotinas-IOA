@@ -53,16 +53,22 @@ export default function DashboardPage() {
       .single();
     setProfile(profileData);
 
-    const admin =
-      profileData?.role === "admin" || profileData?.role === "supervisor";
-    setIsAdmin(admin);
+    const isAdmin = profileData?.role === "admin";
+    const isSupervisor = profileData?.role === "supervisor";
+
+    setIsAdmin(isAdmin || isSupervisor);
 
     let statsQuery = supabase
       .from("tasks")
       .select("status")
       .lte("date_start", todayStr)
       .gte("date_end", todayStr);
-    if (!admin) statsQuery = statsQuery.contains("assigned_users", [user.id]);
+
+    if (isSupervisor) {
+      statsQuery = statsQuery.eq("sector_id", profileData.sector_id);
+    } else if (!isAdmin) {
+      statsQuery = statsQuery.contains("assigned_users", [user.id]);
+    }
     const { data: allTasks } = await statsQuery;
 
     if (allTasks) {
@@ -82,24 +88,46 @@ export default function DashboardPage() {
       .lte("date_start", todayStr)
       .gte("date_end", todayStr)
       .order("created_at");
-    if (!admin) todayQuery = todayQuery.contains("assigned_users", [user.id]);
+
+    if (isSupervisor) {
+      todayQuery = todayQuery.eq("sector_id", profileData.sector_id);
+    } else if (!isAdmin) {
+      todayQuery = todayQuery.contains("assigned_users", [user.id]);
+    }
+
     const { data: todayData } = await todayQuery;
     setTodayTasks(todayData || []);
 
     let historyQuery = supabase
       .from("history")
-      .select("*, profiles(full_name), tasks(title)")
+      .select("*, profiles(full_name), tasks!inner(title, sector_id)")
       .order("created_at", { ascending: false })
       .limit(5);
-    if (!admin) historyQuery = historyQuery.eq("user_id", user.id);
+
+    // 👤 usuário comum
+    if (!isAdmin && !isSupervisor) {
+      historyQuery = historyQuery.eq("user_id", user.id);
+    }
+
+    // 👨‍💼 supervisor (filtra por setor)
+    if (isSupervisor) {
+      historyQuery = historyQuery.eq("tasks.sector_id", profileData.sector_id);
+    }
+
     const { data: historyData } = await historyQuery;
     setRecentHistory(historyData || []);
-    if (admin) {
-      const { data: perfTasks } = await supabase
+    if (isAdmin || isSupervisor) {
+      let { data: perfTasks } = await supabase
         .from("tasks")
-        .select("status, assigned_users, assigned_to")
+        .select("status, assigned_users, assigned_to, sector_id")
         .lte("date_start", todayStr)
         .gte("date_end", todayStr);
+
+      if (isSupervisor) {
+        perfTasks = perfTasks?.filter(
+          (t) => t.sector_id === profileData.sector_id,
+        );
+      }
 
       const allUserIds = [
         ...new Set(
@@ -162,7 +190,7 @@ export default function DashboardPage() {
         setPerformance(sorted);
       }
     }
-    if (admin) {
+    if (isAdmin || isSupervisor) {
       const weekDays = [];
       for (let i = 4; i >= 0; i--) {
         const d = new Date();
@@ -170,11 +198,17 @@ export default function DashboardPage() {
         weekDays.push(formatDate(d));
       }
 
-      const { data: weekTasks } = await supabase
+      let { data: weekTasks } = await supabase
         .from("tasks")
-        .select("status, date_start, date_end")
+        .select("status, date_start, date_end, sector_id")
         .lte("date_start", weekDays[weekDays.length - 1])
         .gte("date_end", weekDays[0]);
+
+      if (isSupervisor) {
+        weekTasks = weekTasks?.filter(
+          (t) => t.sector_id === profileData.sector_id,
+        );
+      }
 
       if (weekTasks) {
         const data = weekDays.map((dateStr) => {

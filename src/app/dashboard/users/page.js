@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase";
 export default function UsersPage() {
   const supabase = createClient();
   const [users, setUsers] = useState([]);
+  const [sectors, setSectors] = useState([]);
   const [currentProfile, setCurrentProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,7 +20,7 @@ export default function UsersPage() {
     password: "",
     role: "employee",
     position: "",
-    sector: "",
+    sector_id: "",
   });
 
   useEffect(() => {
@@ -37,14 +38,22 @@ export default function UsersPage() {
       .select("*")
       .eq("id", user.id)
       .single();
-
     setCurrentProfile(profile);
 
-    const { data } = await supabase
-      .from("profiles")
+    const { data: sectorsData } = await supabase
+      .from("sectors")
       .select("*")
-      .order("full_name");
+      .order("name");
+    setSectors(sectorsData || []);
 
+    let query = supabase.from("profiles").select("*").order("full_name");
+
+    // Supervisor só vê funcionários do mesmo setor
+    if (profile?.role === "supervisor" && profile?.sector_id) {
+      query = query.eq("sector_id", profile.sector_id).eq("role", "employee");
+    }
+
+    const { data } = await query;
     setUsers(data || []);
   }
 
@@ -56,7 +65,8 @@ export default function UsersPage() {
       password: "",
       role: "employee",
       position: "",
-      sector: "",
+      sector_id:
+        currentProfile?.role === "supervisor" ? currentProfile.sector_id : "",
     });
     setError("");
     setSuccess("");
@@ -65,7 +75,7 @@ export default function UsersPage() {
 
   function openEdit(user) {
     setEditingUser(user);
-    setForm({ ...user, password: "" });
+    setForm({ ...user, password: "", sector_id: user.sector_id || "" });
     setError("");
     setSuccess("");
     setShowForm(true);
@@ -81,7 +91,7 @@ export default function UsersPage() {
       const updateData = {
         full_name: form.full_name,
         position: form.position,
-        sector: form.sector,
+        sector_id: form.sector_id || null,
       };
 
       if (currentProfile?.role === "admin") {
@@ -100,10 +110,20 @@ export default function UsersPage() {
         loadData();
       }
     } else {
+      // Supervisor sempre cria como employee no seu setor
+      const payload = {
+        ...form,
+        role: currentProfile?.role === "supervisor" ? "employee" : form.role,
+        sector_id:
+          currentProfile?.role === "supervisor"
+            ? currentProfile.sector_id
+            : form.sector_id,
+      };
+
       const res = await fetch("/api/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const result = await res.json();
@@ -122,22 +142,18 @@ export default function UsersPage() {
 
   async function handleDelete(userId) {
     setLoading(true);
-
     const res = await fetch("/api/delete-user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId }),
     });
-
     const result = await res.json();
-
     if (!res.ok) {
       setError(result.error || "Erro ao excluir usuário.");
     } else {
       setShowDeleteConfirm(null);
       loadData();
     }
-
     setLoading(false);
   }
 
@@ -156,10 +172,24 @@ export default function UsersPage() {
   const isAdmin = currentProfile?.role === "admin";
   const isSupervisor = currentProfile?.role === "supervisor";
 
+  const sectorName = (sector_id) => {
+    return sectors.find((s) => s.id === sector_id)?.name || "—";
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Usuários</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Usuários</h1>
+          {isSupervisor && (
+            <p className="text-sm text-gray-400 mt-1">
+              Exibindo funcionários do setor:{" "}
+              <span className="font-medium text-blue-600">
+                {sectorName(currentProfile?.sector_id)}
+              </span>
+            </p>
+          )}
+        </div>
         {(isAdmin || isSupervisor) && (
           <button
             onClick={openNew}
@@ -240,7 +270,7 @@ export default function UsersPage() {
               ) : (
                 <input
                   type="text"
-                  value={roleLabel(form.role)}
+                  value="Funcionário"
                   disabled
                   className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
                 />
@@ -263,12 +293,29 @@ export default function UsersPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Setor
               </label>
-              <input
-                type="text"
-                value={form.sector}
-                onChange={(e) => setForm({ ...form, sector: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {isSupervisor ? (
+                <input
+                  type="text"
+                  value={sectorName(currentProfile?.sector_id)}
+                  disabled
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                />
+              ) : (
+                <select
+                  value={form.sector_id}
+                  onChange={(e) =>
+                    setForm({ ...form, sector_id: e.target.value })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione um setor</option>
+                  {sectors.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {error && (
@@ -368,7 +415,7 @@ export default function UsersPage() {
                   {user.position || "—"}
                 </td>
                 <td className="px-6 py-4 text-gray-600">
-                  {user.sector || "—"}
+                  {sectorName(user.sector_id)}
                 </td>
                 <td className="px-6 py-4">
                   <span
@@ -385,15 +432,14 @@ export default function UsersPage() {
                     >
                       Editar
                     </button>
-                    {currentProfile?.role === "admin" &&
-                      user.id !== currentProfile?.id && (
-                        <button
-                          onClick={() => setShowDeleteConfirm(user.id)}
-                          className="text-red-500 hover:underline text-sm"
-                        >
-                          Excluir
-                        </button>
-                      )}
+                    {isAdmin && user.id !== currentProfile?.id && (
+                      <button
+                        onClick={() => setShowDeleteConfirm(user.id)}
+                        className="text-red-500 hover:underline text-sm"
+                      >
+                        Excluir
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -401,7 +447,7 @@ export default function UsersPage() {
             {users.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
-                  Nenhum usuário cadastrado.
+                  Nenhum usuário encontrado.
                 </td>
               </tr>
             )}

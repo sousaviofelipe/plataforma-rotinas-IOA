@@ -67,13 +67,25 @@ export default function ManagePage() {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    const { data: tasksData, count } = await supabase
+    // 👉 DEFINE PERFIL
+    const isAdmin = profile?.role === "admin";
+    const isSupervisor = profile?.role === "supervisor";
+
+    // 👉 QUERY BASE
+    let tasksQuery = supabase
       .from("tasks")
       .select("*, profiles!tasks_assigned_to_fkey(full_name), sectors(name)", {
         count: "exact",
       })
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    // 👉 FILTRO POR SETOR (SÓ SUPERVISOR)
+    if (isSupervisor) {
+      tasksQuery = tasksQuery.eq("sector_id", profile.sector_id);
+    }
+
+    const { data: tasksData, count } = await tasksQuery;
 
     setTasks(tasksData || []);
     setTotalCount(count || 0);
