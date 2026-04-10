@@ -110,7 +110,7 @@ export default function DashboardLayout({ children }) {
         ]
       : [{ href: "/dashboard/history", label: "Histórico", icon: "📋" }]),
     { href: "/dashboard/manual", label: "Manual", icon: "📖" }, // 👈 aqui
-
+    { href: "/dashboard/instalar", label: "Instalar App", icon: "📲" },
     { href: "/dashboard/profile", label: "Meu Perfil", icon: "👤" },
   ];
 
