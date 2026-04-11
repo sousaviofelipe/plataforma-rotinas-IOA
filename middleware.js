@@ -32,7 +32,11 @@ export async function middleware(request) {
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/reset-password")
+    !request.nextUrl.pathname.startsWith("/reset-password") &&
+    !request.nextUrl.pathname.startsWith("/manifest") &&
+    !request.nextUrl.pathname.endsWith(".webmanifest") &&
+    !request.nextUrl.pathname.startsWith("/sw.js") &&
+    !request.nextUrl.pathname.startsWith("/icon-")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
