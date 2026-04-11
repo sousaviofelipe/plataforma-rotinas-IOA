@@ -1,35 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-let deferredPrompt = null;
+import { useEffect, useState, useRef } from "react";
 
 export default function PwaRegister() {
   const [instalavel, setInstalavel] = useState(false);
+  const promptRef = useRef(null);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(console.error);
     }
 
-    window.addEventListener("beforeinstallprompt", (e) => {
+    const handler = (e) => {
       e.preventDefault();
-      deferredPrompt = e;
+      promptRef.current = e;
       setInstalavel(true);
-    });
+    };
 
+    window.addEventListener("beforeinstallprompt", handler);
     window.addEventListener("appinstalled", () => {
       setInstalavel(false);
-      deferredPrompt = null;
+      promptRef.current = null;
     });
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
   async function handleInstalar() {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    const prompt = promptRef.current;
+    if (!prompt) return;
+    await prompt.prompt();
+    const { outcome } = await prompt.userChoice;
     if (outcome === "accepted") setInstalavel(false);
-    deferredPrompt = null;
+    promptRef.current = null;
   }
 
   if (!instalavel) return null;
