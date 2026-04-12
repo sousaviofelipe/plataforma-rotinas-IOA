@@ -16,6 +16,7 @@ import autoTable from "jspdf-autotable";
 import Link from "next/link";
 
 export default function DashboardPage() {
+  const [showReportMenu, setShowReportMenu] = useState(false);
   const [performance, setPerformance] = useState([]);
   const [weekData, setWeekData] = useState([]);
   const supabase = createClient();
@@ -250,65 +251,116 @@ export default function DashboardPage() {
     return "Pendente";
   };
 
-  async function generatePDF() {
-    const doc = new jsPDF();
-    const dateStr = new Date().toLocaleDateString("pt-BR", {
-      weekday: "long",
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
+  function getWeekRange() {
+    const today = new Date();
+    const day = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { start: formatDate(monday), end: formatDate(sunday) };
+  }
+
+  function getMonthRange() {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { start: formatDate(start), end: formatDate(end) };
+  }
+
+  function formatDateBR(dateStr) {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
+  async function generatePDF(tipo = "diario") {
+    let dateStart, dateEnd, titulo;
+
+    if (tipo === "diario") {
+      dateStart = todayStr;
+      dateEnd = todayStr;
+      titulo = `Relatório do dia — ${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}`;
+    } else if (tipo === "semanal") {
+      const range = getWeekRange();
+      dateStart = range.start;
+      dateEnd = range.end;
+      titulo = `Relatório semanal — ${formatDateBR(range.start)} a ${formatDateBR(range.end)}`;
+    } else {
+      const range = getMonthRange();
+      dateStart = range.start;
+      dateEnd = range.end;
+      titulo = `Relatório mensal — ${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`;
+    }
+
+    // Busca tarefas do período
+    const { data: reportTasks } = await supabase
+      .from("tasks")
+      .select("*, profiles!tasks_assigned_to_fkey(full_name), sectors(name)")
+      .lte("date_start", dateEnd)
+      .gte("date_end", dateStart)
+      .order("date_start");
+
+    const tasks = reportTasks || [];
+
+    const doc = new jsPDF({
+      orientation: "landscape",
     });
 
     // Cabeçalho
     doc.setFillColor(30, 58, 138);
-    doc.rect(0, 0, 210, 35, "F");
+    doc.rect(0, 0, doc.internal.pageSize.width, 35, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("Plataforma de Rotinas", 14, 15);
+    doc.text("IOA IOP - Plataforma de Rotinas", 14, 15);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(`Relatório do dia — ${dateStr}`, 14, 25);
+    doc.text(titulo, 14, 25);
 
     // Resumo
+    const total = tasks.length;
+    const completed = tasks.filter((t) => t.status === "completed").length;
+    const inProgress = tasks.filter((t) => t.status === "in_progress").length;
+    const pending = tasks.filter((t) => t.status === "pending").length;
+    const notCompleted = tasks.filter(
+      (t) => t.status === "not_completed",
+    ).length;
+
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Resumo do dia", 14, 48);
+    doc.text("Resumo do período", 14, 48);
 
     autoTable(doc, {
       startY: 53,
       head: [
         ["Total", "Concluídas", "Em andamento", "Pendentes", "Não concluídas"],
       ],
-
-      body: [
-        [
-          stats.total,
-          stats.completed,
-          stats.in_progress,
-          stats.pending,
-          stats.not_completed,
-        ],
-      ],
-
+      body: [[total, completed, inProgress, pending, notCompleted]],
       headStyles: { fillColor: [30, 58, 138], fontSize: 10 },
       bodyStyles: { fontSize: 11, halign: "center" },
       columnStyles: {
         0: { halign: "center" },
         1: { textColor: [22, 163, 74], halign: "center" },
-        2: { textColor: [202, 138, 4], halign: "center" },
-        3: { textColor: [220, 38, 38], halign: "center" },
+        2: { textColor: [147, 51, 234], halign: "center" },
+        3: { textColor: [202, 138, 4], halign: "center" },
+        4: { textColor: [220, 38, 38], halign: "center" },
       },
       margin: { left: 14, right: 14 },
     });
 
-    // Tarefas do dia
+    // Tarefas
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Tarefas do dia", 14, doc.lastAutoTable.finalY + 15);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Tarefas do período", 14, doc.lastAutoTable.finalY + 15);
 
-    const taskRows = todayTasks.map((task) => [
+    const taskRows = tasks.map((task) => [
+      formatDateBR(task.date_start) +
+        (task.date_end !== task.date_start
+          ? ` a ${formatDateBR(task.date_end)}`
+          : ""),
       task.title,
       task.profiles?.full_name || "—",
       task.sectors?.name || "—",
@@ -318,61 +370,31 @@ export default function DashboardPage() {
           ? "Não concluída"
           : task.status === "waiting_approval"
             ? "Aguard. aprovação"
-            : "Pendente",
+            : task.status === "in_progress"
+              ? "Em andamento"
+              : "Pendente",
       task.justification || "—",
     ]);
 
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 20,
-      head: [["Tarefa", "Responsável", "Setor", "Status", "Justificativa"]],
+      head: [
+        ["Data", "Tarefa", "Responsável", "Setor", "Status", "Justificativa"],
+      ],
       body: taskRows,
       headStyles: { fillColor: [30, 58, 138], fontSize: 9 },
       bodyStyles: { fontSize: 9 },
+      styles: { overflow: "linebreak", cellPadding: 2 },
       columnStyles: {
-        0: { cellWidth: 55 },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 35 },
-        4: { cellWidth: 35 },
-      },
-      didDrawCell: (data) => {
-        if (data.section === "body" && data.column.index === 3) {
-          const status = data.cell.raw;
-          if (status === "Concluída") doc.setTextColor(22, 163, 74);
-          else if (status === "Não concluída") doc.setTextColor(220, 38, 38);
-          else if (status === "Aguard. aprovação")
-            doc.setTextColor(37, 99, 235);
-          else doc.setTextColor(202, 138, 4);
-        }
+        0: { cellWidth: 30 },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 35 },
       },
       margin: { left: 14, right: 14 },
     });
-
-    // Desempenho por funcionário
-    if (performance.length > 0) {
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0);
-      doc.text("Desempenho por funcionário", 14, doc.lastAutoTable.finalY + 15);
-
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 20,
-        head: [
-          ["Funcionário", "Concluídas", "Pendentes", "Não concluídas", "Total"],
-        ],
-        body: performance.map((p) => [
-          p.name,
-          p.completed,
-          p.pending,
-          p.not_completed,
-          p.total,
-        ]),
-        headStyles: { fillColor: [30, 58, 138], fontSize: 9 },
-        bodyStyles: { fontSize: 9, halign: "center" },
-        columnStyles: { 0: { halign: "left" } },
-        margin: { left: 14, right: 14 },
-      });
-    }
 
     // Rodapé
     const pageCount = doc.internal.getNumberOfPages();
@@ -387,7 +409,8 @@ export default function DashboardPage() {
       );
     }
 
-    doc.save(`relatorio-${new Date().toISOString().split("T")[0]}.pdf`);
+    doc.save(`relatorio-${tipo}-${new Date().toISOString().split("T")[0]}.pdf`);
+    setShowReportMenu(false);
   }
 
   const percent =
@@ -421,12 +444,36 @@ export default function DashboardPage() {
             </Link>
           )}
           {isAdmin && (
-            <button
-              onClick={generatePDF}
-              className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
-            >
-              📄 Relatório
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowReportMenu(!showReportMenu)}
+                className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+              >
+                📄 Relatório ▾
+              </button>
+              {showReportMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+                  <button
+                    onClick={() => generatePDF("diario")}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    📄 Diário
+                  </button>
+                  <button
+                    onClick={() => generatePDF("semanal")}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition border-t border-gray-50"
+                  >
+                    📅 Semanal
+                  </button>
+                  <button
+                    onClick={() => generatePDF("mensal")}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition border-t border-gray-50"
+                  >
+                    🗓️ Mensal
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           <Link
             href="/dashboard/manual"

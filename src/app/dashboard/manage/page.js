@@ -400,10 +400,11 @@ export default function ManagePage() {
 
       {/* Formulário tarefa */}
       {showForm && (
-        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 mb-6">
           <h2 className="font-semibold text-gray-700 mb-4">
             {editingTask ? "Editar tarefa" : "Nova tarefa"}
           </h2>
+
           <form
             onSubmit={handleSave}
             className="grid grid-cols-1 lg:grid-cols-2 gap-4"
@@ -416,7 +417,7 @@ export default function ManagePage() {
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -431,11 +432,12 @@ export default function ManagePage() {
                   setForm({ ...form, description: e.target.value })
                 }
                 rows={3}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
-            <div>
+            {/* SETOR */}
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Setor
               </label>
@@ -444,7 +446,7 @@ export default function ManagePage() {
                 onChange={(e) =>
                   setForm({ ...form, sector_id: e.target.value })
                 }
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Selecione um setor</option>
                 {sectors.map((s) => (
@@ -455,17 +457,19 @@ export default function ManagePage() {
               </select>
             </div>
 
-            <div className="col-span-1 lg:col-span-2">
+            {/* RESPONSÁVEIS */}
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Responsáveis
               </label>
-              <div className="flex flex-wrap gap-2">
+
+              <div className="flex flex-wrap gap-2 max-h-28 sm:max-h-32 overflow-y-auto pr-1">
                 {users.map((u) => (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => toggleAssignedUser(u.id)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                    className={`px-2 sm:px-3 py-1 rounded-md sm:rounded-lg text-[11px] sm:text-sm font-medium transition whitespace-nowrap ${
                       (form.assigned_users || []).includes(u.id)
                         ? "bg-blue-700 text-white"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -475,6 +479,7 @@ export default function ManagePage() {
                   </button>
                 ))}
               </div>
+
               {form.assigned_users?.length > 0 && (
                 <p className="text-xs text-blue-600 mt-2">
                   {form.assigned_users.length} responsável(is) selecionado(s)
@@ -482,121 +487,129 @@ export default function ManagePage() {
               )}
             </div>
 
-            <div className="col-span-1 lg:col-span-2">
+            {/* CALENDÁRIO */}
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Data(s) da tarefa
               </label>
-              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                {/* Navegação do mês */}
-                <div className="flex items-center justify-between mb-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCalendarDate(
-                        new Date(
-                          calendarDate.getFullYear(),
-                          calendarDate.getMonth() - 1,
-                          1,
-                        ),
-                      )
-                    }
-                    className="p-1.5 hover:bg-gray-200 rounded-lg transition text-gray-600"
-                  >
-                    ←
-                  </button>
-                  <p className="text-sm font-semibold text-gray-700">
-                    {calendarDate.toLocaleString("pt-BR", {
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCalendarDate(
-                        new Date(
-                          calendarDate.getFullYear(),
-                          calendarDate.getMonth() + 1,
-                          1,
-                        ),
-                      )
-                    }
-                    className="p-1.5 hover:bg-gray-200 rounded-lg transition text-gray-600"
-                  >
-                    →
-                  </button>
-                </div>
 
-                {/* Cabeçalho dias */}
-                <div className="grid grid-cols-7 mb-1">
-                  {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(
-                    (d) => (
-                      <div
-                        key={d}
-                        className="text-center text-xs font-medium text-gray-400 py-1"
-                      >
-                        {d}
-                      </div>
-                    ),
-                  )}
-                </div>
-
-                {/* Dias do mês */}
-                <div className="grid grid-cols-7 gap-0.5">
-                  {getCalendarDays(calendarDate).map((day, idx) => {
-                    if (!day) return <div key={idx} />;
-                    const dateStr = formatDate(day);
-                    const isStart = form.date_start === dateStr;
-                    const isEnd = form.date_end === dateStr;
-                    const isInRange =
-                      form.date_start &&
-                      form.date_end &&
-                      dateStr > form.date_start &&
-                      dateStr < form.date_end;
-                    const isToday = dateStr === formatDate(new Date());
-
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleCalendarClick(dateStr)}
-                        className={`
-              text-center text-sm py-1.5 rounded-lg transition font-medium
-              ${isStart || isEnd ? "bg-blue-700 text-white" : ""}
-              ${isInRange ? "bg-blue-100 text-blue-700" : ""}
-              ${!isStart && !isEnd && !isInRange ? "hover:bg-gray-200 text-gray-700" : ""}
-              ${isToday && !isStart && !isEnd ? "ring-2 ring-blue-400" : ""}
-            `}
-                      >
-                        {day.getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Resumo seleção */}
-                {form.date_start && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600 flex items-center justify-between">
-                    <span>
-                      {form.date_end && form.date_end !== form.date_start
-                        ? `📅 ${formatDateBR(form.date_start)} até ${formatDateBR(form.date_end)}`
-                        : `📅 ${formatDateBR(form.date_start)}`}
-                    </span>
+              <div className="border border-gray-200 rounded-xl p-3 sm:p-4 bg-gray-50 overflow-x-auto">
+                <div className="min-w-[300px] sm:min-w-full">
+                  {/* Navegação */}
+                  <div className="flex items-center justify-between mb-3">
                     <button
                       type="button"
                       onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          date_start: "",
-                          date_end: "",
-                        }))
+                        setCalendarDate(
+                          new Date(
+                            calendarDate.getFullYear(),
+                            calendarDate.getMonth() - 1,
+                            1,
+                          ),
+                        )
                       }
-                      className="text-red-400 hover:text-red-600 transition"
+                      className="p-1.5 hover:bg-gray-200 rounded-lg transition text-gray-600"
                     >
-                      Limpar
+                      ←
+                    </button>
+
+                    <p className="text-xs sm:text-sm font-semibold text-gray-700 text-center">
+                      {calendarDate.toLocaleString("pt-BR", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCalendarDate(
+                          new Date(
+                            calendarDate.getFullYear(),
+                            calendarDate.getMonth() + 1,
+                            1,
+                          ),
+                        )
+                      }
+                      className="p-1.5 hover:bg-gray-200 rounded-lg transition text-gray-600"
+                    >
+                      →
                     </button>
                   </div>
-                )}
+
+                  {/* Cabeçalho */}
+                  <div className="grid grid-cols-7 mb-1">
+                    {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(
+                      (d) => (
+                        <div
+                          key={d}
+                          className="text-center text-[10px] sm:text-xs font-medium text-gray-400 py-1"
+                        >
+                          {d}
+                        </div>
+                      ),
+                    )}
+                  </div>
+
+                  {/* Dias */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {getCalendarDays(calendarDate).map((day, idx) => {
+                      if (!day) return <div key={idx} />;
+
+                      const dateStr = formatDate(day);
+                      const isStart = form.date_start === dateStr;
+                      const isEnd = form.date_end === dateStr;
+                      const isInRange =
+                        form.date_start &&
+                        form.date_end &&
+                        dateStr > form.date_start &&
+                        dateStr < form.date_end;
+                      const isToday = dateStr === formatDate(new Date());
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleCalendarClick(dateStr)}
+                          className={`
+                      text-center text-[11px] sm:text-sm py-1 sm:py-1.5 rounded-md sm:rounded-lg transition font-medium
+                      ${isStart || isEnd ? "bg-blue-700 text-white" : ""}
+                      ${isInRange ? "bg-blue-100 text-blue-700" : ""}
+                      ${!isStart && !isEnd && !isInRange ? "hover:bg-gray-200 text-gray-700" : ""}
+                      ${isToday && !isStart && !isEnd ? "ring-1 sm:ring-2 ring-blue-400" : ""}
+                    `}
+                        >
+                          {day.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Resumo */}
+                  {form.date_start && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 text-[11px] sm:text-xs text-gray-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <span>
+                        {form.date_end && form.date_end !== form.date_start
+                          ? `📅 ${formatDateBR(form.date_start)} até ${formatDateBR(form.date_end)}`
+                          : `📅 ${formatDateBR(form.date_start)}`}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            date_start: "",
+                            date_end: "",
+                          }))
+                        }
+                        className="text-red-400 hover:text-red-600 transition text-xs"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -607,79 +620,24 @@ export default function ManagePage() {
               <p className="col-span-2 text-green-600 text-sm">{success}</p>
             )}
 
-            <div className="col-span-2 flex gap-3">
+            <div className="col-span-2 flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 type="submit"
                 disabled={loading}
-                className="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg transition disabled:opacity-50"
+                className="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg transition disabled:opacity-50 w-full sm:w-auto"
               >
                 {loading ? "Salvando..." : "Salvar"}
               </button>
+
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-6 py-2.5 rounded-lg transition"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-6 py-2.5 rounded-lg transition w-full sm:w-auto"
               >
                 Cancelar
               </button>
             </div>
           </form>
-        </div>
-      )}
-
-      {/* Filtros */}
-      <div className="flex gap-3 mb-4">
-        <select
-          value={filterDay}
-          onChange={(e) => setFilterDay(e.target.value)}
-          className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Todos os dias</option>
-          {DAYS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filterSector}
-          onChange={(e) => setFilterSector(e.target.value)}
-          className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Todos os setores</option>
-          {sectors.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Modal confirmação exclusão */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full mx-4">
-            <h3 className="font-bold text-gray-800 mb-2">Confirmar exclusão</h3>
-            <p className="text-gray-500 text-sm mb-6">
-              Tem certeza que deseja excluir esta tarefa?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleDelete(showDeleteConfirm)}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition disabled:opacity-50"
-              >
-                {loading ? "Excluindo..." : "Excluir"}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(null)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -755,6 +713,7 @@ export default function ManagePage() {
           </tbody>
         </table>
       </div>
+
       {/* Paginação */}
       {totalCount > ITEMS_PER_PAGE && (
         <div className="flex items-center justify-between mt-4">
