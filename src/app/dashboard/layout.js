@@ -112,6 +112,12 @@ export default function DashboardLayout({ children }) {
     { href: "/dashboard/manual", label: "Manual", icon: "📖" }, // 👈 aqui
     { href: "/dashboard/instalar", label: "Instalar App", icon: "📲" },
     { href: "/dashboard/profile", label: "Meu Perfil", icon: "👤" },
+    {
+      href: "/dashboard/guia",
+      label: "Guia de Uso",
+      icon: "📖",
+      roles: ["admin", "supervisor", "employee"],
+    },
   ];
 
   const notifIcon = (type) => {
